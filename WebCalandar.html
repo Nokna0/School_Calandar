@@ -498,6 +498,17 @@
                     }
                     html += '</tbody></table>';
                 }
+
+                // 알레르기 정보 범례 추가
+                html += '<div style="margin-top:12px; padding:10px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px;">';
+                html += '<p style="margin:0 0 6px 0; font-weight:bold; font-size:11px; color:#495057;">알레르기 유발 식품 정보</p>';
+                html += '<div style="font-size:10px; line-height:1.5; color:#6c757d;">';
+                html += '1.난류 2.우유 3.메밀 4.땅콩 5.대두 6.밀 7.고등어 8.게 9.새우<br>';
+                html += '10.돼지고기 11.복숭아 12.토마토 13.아황산류 14.호두 15.닭고기<br>';
+                html += '16.쇠고기 17.오징어 18.조개류(굴,전복,홍합 포함)';
+                html += '</div>';
+                html += '</div>';
+
                 html += '</div>';
                 return html;
             }
