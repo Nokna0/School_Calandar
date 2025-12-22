@@ -651,11 +651,32 @@
             #selectedDate {
                 padding: 20px;
                 border: 1px solid #000;
-                width: 400px;
-                height: 600px;
+                width: 500px;
+                min-width: 500px;
+                max-width: 500px;
+                height: 800px;
+                min-height: 800px;
+                max-height: 800px;
                 overflow-y: auto;
                 overflow-x: hidden;
                 box-sizing: border-box;
+                flex-shrink: 0;
+            }
+
+            /* 내부 테이블 크기 제한 */
+            #timetableDisplay table {
+                width: 100%;
+                max-width: 100%;
+                table-layout: fixed;
+                word-wrap: break-word;
+            }
+
+            #timetableDisplay table td,
+            #timetableDisplay table th {
+                width: auto;
+                height: auto;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
         </style>      
     </body>
