@@ -430,7 +430,7 @@
                     renderCalendar();
                 </script>
             </div>
-                <div id="selectedDate" style="padding: 20px; border: 1px solid #000; min-width: 200px;">
+                <div id="selectedDate">
                 <p>선택된 날짜:</p>
                 <p id="dateDisplay">없음</p>
                 <p id="scheduleDisplay">일정: 없음</p>
@@ -631,6 +631,17 @@
             table {
                 margin: 10px;
                 border-style: double;
+            }
+
+            /* 선택된 날짜 박스 크기 고정 */
+            #selectedDate {
+                padding: 20px;
+                border: 1px solid #000;
+                width: 400px;
+                height: 600px;
+                overflow-y: auto;
+                overflow-x: hidden;
+                box-sizing: border-box;
             }
         </style>      
     </body>
