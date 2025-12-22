@@ -464,13 +464,13 @@
                         meals[currentMeal].push(trimmed);
                     }
                 }
-                let html = '<div style="margin-top:10px;"><p style="margin:5px 0; font-weight:bold;">급식</p>';
+                let html = '<div style="margin-top:15px;"><p style="margin:8px 0; font-weight:bold; font-size:14px;">급식</p>';
                 for (const mType of ['조식','중식','석식']) {
                     if (meals[mType].length === 0) continue;
-                    html += `<p style="margin:5px 0 2px 0; font-size:11px; font-weight:bold;">${mType}</p>`;
-                    html += '<table style="border-collapse:collapse; width:100%; font-size:11px; margin-bottom:5px;"><tbody>';
+                    html += `<p style="margin:8px 0 4px 0; font-size:13px; font-weight:bold;">${mType}</p>`;
+                    html += '<table style="border-collapse:collapse; width:100%; font-size:12px; margin-bottom:8px;"><tbody>';
                     for (const item of meals[mType]) {
-                        html += `<tr><td style="border:1px solid #ddd; padding:3px; text-align:left;">${item}</td></tr>`;
+                        html += `<tr><td style="border:1px solid #ddd; padding:5px; text-align:left;">${item}</td></tr>`;
                     }
                     html += '</tbody></table>';
                 }
@@ -501,13 +501,13 @@
                     const entries = !isWeekend && classSchedules[selClass] && classSchedules[selClass][key] ? classSchedules[selClass][key] : 
                                    (!isWeekend ? (defaultClassTimetables[selClass] || null) : null);
                     if (entries) {
-                        // build table 1~7교시 (크기 극소화, 담당 제거)
-                        let table = `<table style="border-collapse:collapse; width:100%; font-size:8px; line-height:1;"><tr><th style="border:1px solid #ccc; padding:1px;">교시</th><th style="border:1px solid #ccc; padding:1px;">시간</th><th style="border:1px solid #ccc; padding:1px;">과목</th></tr>`;
+                        // build table 1~7교시 (세로 크기 증가)
+                        let table = `<p style="margin: 10px 0 5px 0; font-weight: bold;">시간표:</p><table style="border-collapse:collapse; width:100%; font-size:13px; line-height:1.4;"><tr><th style="border:1px solid #ccc; padding:6px;">교시</th><th style="border:1px solid #ccc; padding:6px;">시간</th><th style="border:1px solid #ccc; padding:6px;">과목</th></tr>`;
                         for (let p = 1; p <= 7; p++) {
                             const e = entries.find(en => en.period === p) || null;
                             const time = e ? e.time : '';
                             const subj = e ? e.subject : '';
-                            table += `<tr><td style="border:1px solid #eee; padding:1px; text-align:center;">${p}</td><td style="border:1px solid #eee; padding:1px; text-align:center;">${time}</td><td style="border:1px solid #eee; padding:1px;">${subj}</td></tr>`;
+                            table += `<tr><td style="border:1px solid #eee; padding:6px; text-align:center;">${p}</td><td style="border:1px solid #eee; padding:6px; text-align:center;">${time}</td><td style="border:1px solid #eee; padding:6px;">${subj}</td></tr>`;
                         }
                         table += '</table>';
                         timetableDiv.innerHTML = table;
@@ -535,6 +535,9 @@
                 if (mealPart) {
                     const mealHtml = renderMealTable(mealPart);
                     timetableDiv.innerHTML += mealHtml;
+                } else {
+                    // 급식 정보가 없을 경우 메시지 표시
+                    timetableDiv.innerHTML += '<div style="margin-top:15px;"><p style="margin:8px 0; font-size:12px; color:#666;">이 날짜의 급식 정보가 없습니다.</p></div>';
                 }
 
                 // '수정' 버튼은 날짜 선택 시 항상 표시 (추가/수정 모두 처리)
