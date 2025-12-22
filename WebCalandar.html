@@ -418,6 +418,12 @@
                             // 급식 정보 제외하고 일정만 tooltip에 표시
                             let schedule = schedules[key] || '';
                             let userSchedule = schedule ? schedule.replace(/식단:[\s\S]*$/,'').trim() : '';
+
+                            // 사용자 일정이 있으면 시각적 표시 추가
+                            if (userSchedule) {
+                                classes.push('has-schedule');
+                            }
+
                             let titleAttr = userSchedule ? ` title="${userSchedule.replace(/"/g, '\\"')}"` : "";
                             html += `<td class='${classes.join(' ')}' data-date='${key}' onclick="showDate(${year}, ${month}, ${i})"${titleAttr}>${i}</td>`;
 
@@ -608,15 +614,21 @@
                     document.getElementById("scheduleDisplay").textContent = newSchedule;
                 }
 
-                // 달력 셀 툴팁만 업데이트 (급식 정보 제외, 일정만 표시)
+                // 달력 셀 툴팁과 시각적 표시 업데이트 (급식 정보 제외, 일정만 표시)
                 let cell = document.querySelector(`td[data-date='${key}']`);
                 if (cell) {
                     let schedule = schedules[key] || '';
                     let userSchedule = schedule ? schedule.replace(/식단:[\s\S]*$/,'').trim() : '';
                     if (userSchedule) {
                         cell.title = userSchedule;
+                        // 일정이 있으면 has-schedule 클래스 추가
+                        if (!cell.classList.contains('has-schedule')) {
+                            cell.classList.add('has-schedule');
+                        }
                     } else {
                         cell.removeAttribute('title');
+                        // 일정이 없으면 has-schedule 클래스 제거
+                        cell.classList.remove('has-schedule');
                     }
                 }
             }
@@ -715,6 +727,24 @@
                 height: auto;
                 overflow: hidden;
                 text-overflow: ellipsis;
+            }
+
+            /* 일정이 있는 날 표시 */
+            .has-schedule {
+                position: relative;
+                background-color: #fff9e6 !important;
+                font-weight: bold;
+            }
+
+            .has-schedule::after {
+                content: '•';
+                position: absolute;
+                bottom: 4px;
+                left: 50%;
+                transform: translateX(-50%);
+                color: #ff6b6b;
+                font-size: 18px;
+                line-height: 1;
             }
         </style>      
     </body>
