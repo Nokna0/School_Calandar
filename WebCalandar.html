@@ -128,12 +128,15 @@
                     // CSV(급식) 파싱: 날짜 헤더 행을 찾아 각 열의 날짜별 내용을 수집
                     function parseMealCSV(text, filename) {
                         const rows = parseCSV(text);
-                        // find header row that contains day numbers
-                        let headerRow = -1;
+                        // find all header rows that contains day numbers (주 단위로 반복됨)
+                        const headerRows = [];
                         for (let i = 0; i < rows.length; i++) {
-                            if (rows[i].some(cell => /^\s*\d{1,2}\s*$/.test(cell))) { headerRow = i; break; }
+                            if (rows[i].some(cell => /^\s*\d{1,2}\s*$/.test(cell))) {
+                                headerRows.push(i);
+                            }
                         }
-                        if (headerRow === -1) return {};
+                        if (headerRows.length === 0) return {};
+
                         // determine year-month from filename like '2025-10.csv' -> '2025-10'
                         const base = filename.replace('.csv','');
                         const ym = base.split('-');
@@ -141,25 +144,32 @@
                         const m = Number(ym[1]) || month;
 
                         const result = {}; // key -> text
-                        const header = rows[headerRow];
-                        for (let c = 0; c < header.length; c++) {
-                            const cell = header[c] && header[c].trim();
-                            const mday = cell && cell.match(/(\d{1,2})/);
-                            if (!mday) continue;
-                            const day = Number(mday[1]);
-                            const key = `${y}-${m}-${day}`;
-                            const parts = [];
-                            // collect subsequent non-empty cells in this column
-                            for (let r = headerRow + 1; r < rows.length; r++) {
-                                const val = (rows[r][c] || '').trim();
-                                if (!val) continue;
-                                // stop if we hit a new header-like numeric row (rare)
-                                if (/^\s*\d{1,2}\s*$/.test(val)) break;
-                                parts.push(val);
-                            }
-                            if (parts.length) {
-                                // join parts with newline and normalize spaces
-                                result[key] = parts.join('\n');
+
+                        // 각 헤더 행(주)마다 처리
+                        for (let h = 0; h < headerRows.length; h++) {
+                            const headerRow = headerRows[h];
+                            const nextHeaderRow = h < headerRows.length - 1 ? headerRows[h + 1] : rows.length;
+                            const header = rows[headerRow];
+
+                            for (let c = 0; c < header.length; c++) {
+                                const cell = header[c] && header[c].trim();
+                                const mday = cell && cell.match(/(\d{1,2})/);
+                                if (!mday) continue;
+                                const day = Number(mday[1]);
+                                const key = `${y}-${m}-${day}`;
+                                const parts = [];
+
+                                // collect subsequent non-empty cells in this column until next header
+                                for (let r = headerRow + 1; r < nextHeaderRow; r++) {
+                                    const val = (rows[r][c] || '').trim();
+                                    if (!val) continue;
+                                    parts.push(val);
+                                }
+
+                                if (parts.length) {
+                                    // join parts with newline and normalize spaces
+                                    result[key] = parts.join('\n');
+                                }
                             }
                         }
                         return result;
