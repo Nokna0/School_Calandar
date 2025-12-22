@@ -177,32 +177,44 @@
 
                     // mealCSVs에서 파싱하여 schedules에 삽입
                     function parseMealCSVsToSchedules() {
+                        console.log('급식 파싱 시작, mealCSVs 키:', Object.keys(mealCSVs));
+                        let totalMeals = 0;
                         for (const fnameKey in mealCSVs) {
                             const txt = mealCSVs[fnameKey];
                             const parsed = parseMealCSV(txt, fnameKey + '.csv');
+                            console.log(`${fnameKey} 파싱 결과:`, Object.keys(parsed).length, '개 날짜');
                             for (const k in parsed) {
                                 // don't overwrite user schedules; append if exists
-                                if (schedules[k]) schedules[k] += '\n\n식단:\n' + parsed[k]; else schedules[k] = '식단:\n' + parsed[k];
+                                if (schedules[k]) schedules[k] += '\n\n식단:\n' + parsed[k];
+                                else schedules[k] = '식단:\n' + parsed[k];
+                                totalMeals++;
                             }
                         }
+                        console.log('총', totalMeals, '개 날짜에 급식 정보 추가됨');
                     }
 
                     // 시도: 같은 폴더에서 meal CSV 자동 불러오기
                     async function tryLoadMealCSVs() {
+                        console.log('급식 CSV 파일 자동 로딩 시도 중...');
                         let allLoaded = true;
                         for (const fname of mealFileNames) {
                             try {
                                 const txt = await fetchTextWithEncoding(fname);
                                 const key = fname.replace('.csv','');
                                 mealCSVs[key] = txt;
+                                console.log(`${fname} 로드 성공 (${txt.length} 바이트)`);
                             } catch (e) {
+                                console.log(`${fname} 로드 실패:`, e.message);
                                 allLoaded = false;
                                 break;
                             }
                         }
                         if (Object.keys(mealCSVs).length) {
+                            console.log('급식 CSV 파싱 시작...');
                             parseMealCSVsToSchedules();
                             renderCalendar();
+                        } else {
+                            console.log('급식 CSV 파일을 로드하지 못했습니다. 파일 선택 UI를 표시하세요.');
                         }
                         return allLoaded;
                     }
@@ -305,11 +317,16 @@
                             if (loaderDiv) loaderDiv.style.display = 'block';
                         }
                         // try loading meal CSVs as well
-                        tryLoadMealCSVs().catch(()=>{});
+                        const mealLoaded = await tryLoadMealCSVs().catch(()=> false);
+                        if (!mealLoaded && loaderDiv) {
+                            console.log('급식 CSV 자동 로드 실패, 파일 선택 UI 표시');
+                            loaderDiv.style.display = 'block';
+                        }
                     }
 
                     // 사용자가 파일 선택했을 때 처리
                     async function handleLocalCSVFiles(files) {
+                        console.log('사용자가 선택한 파일:', files.length, '개');
                         for (const f of files) {
                             try {
                                 const buf = await f.arrayBuffer();
@@ -322,17 +339,21 @@
                                 // if filename matches YYYY-M or YYYY-MM -> meal CSV
                                 if (/^\d{4}-\d{1,2}$/.test(key)) {
                                     mealCSVs[key] = text;
+                                    console.log(`급식 CSV 파일 로드: ${name} (${text.length} 바이트)`);
                                 } else if (classFileNames.includes(name)) {
                                     classCSVs[key] = text;
+                                    console.log(`학급 CSV 파일 로드: ${name} (${text.length} 바이트)`);
                                 } else {
                                     // fallback: if name like '3-1' or '2-7' treat as class
                                     classCSVs[key] = text;
+                                    console.log(`학급 CSV 파일 로드 (추정): ${name} (${text.length} 바이트)`);
                                 }
                             } catch (e) {
                                 console.error('파일 읽기 실패', f.name, e);
                             }
                         }
                         // re-parse both kinds
+                        console.log('파일 로드 완료, 파싱 시작...');
                         loadClassSchedules();
                         parseMealCSVsToSchedules();
                         renderCalendar();
@@ -354,9 +375,12 @@
                     }
                 </script>
 
-                <div id="csvLoader" style="display:none; margin:8px 0; text-align:center; font-size:13px; color:#333;">
-                    같은 폴더에서 CSV 파일을 자동으로 불러옵니다. 자동으로 불러오지 못하면 파일을 선택하세요:
+                <div id="csvLoader" style="display:none; margin:8px 0; padding:10px; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; text-align:center; font-size:13px; color:#333;">
+                    <strong>급식 정보 로드 필요</strong><br>
+                    같은 폴더에서 CSV 파일을 자동으로 불러올 수 없습니다.<br>
+                    급식 CSV 파일(2025-10.csv, 2025-11.csv, 2025-12.csv)을 선택하세요:
                     <div style="margin-top:6px;"><input id="csvFiles" type="file" accept=".csv" multiple></div>
+                    <small style="color:#666;">* 학급 시간표 CSV도 함께 선택 가능</small>
                 </div>
 
                 <div id="calendarContainer"></div>
@@ -464,13 +488,13 @@
                         meals[currentMeal].push(trimmed);
                     }
                 }
-                let html = '<div style="margin-top:10px;"><p style="margin:5px 0; font-weight:bold;">급식</p>';
+                let html = '<div style="margin-top:15px;"><p style="margin:8px 0; font-weight:bold; font-size:14px;">급식</p>';
                 for (const mType of ['조식','중식','석식']) {
                     if (meals[mType].length === 0) continue;
-                    html += `<p style="margin:5px 0 2px 0; font-size:11px; font-weight:bold;">${mType}</p>`;
-                    html += '<table style="border-collapse:collapse; width:100%; font-size:11px; margin-bottom:5px;"><tbody>';
+                    html += `<p style="margin:8px 0 4px 0; font-size:13px; font-weight:bold;">${mType}</p>`;
+                    html += '<table style="border-collapse:collapse; width:100%; font-size:12px; margin-bottom:8px;"><tbody>';
                     for (const item of meals[mType]) {
-                        html += `<tr><td style="border:1px solid #ddd; padding:3px; text-align:left;">${item}</td></tr>`;
+                        html += `<tr><td style="border:1px solid #ddd; padding:5px; text-align:left;">${item}</td></tr>`;
                     }
                     html += '</tbody></table>';
                 }
@@ -501,13 +525,13 @@
                     const entries = !isWeekend && classSchedules[selClass] && classSchedules[selClass][key] ? classSchedules[selClass][key] : 
                                    (!isWeekend ? (defaultClassTimetables[selClass] || null) : null);
                     if (entries) {
-                        // build table 1~7교시 (크기 극소화, 담당 제거)
-                        let table = `<table style="border-collapse:collapse; width:100%; font-size:8px; line-height:1;"><tr><th style="border:1px solid #ccc; padding:1px;">교시</th><th style="border:1px solid #ccc; padding:1px;">시간</th><th style="border:1px solid #ccc; padding:1px;">과목</th></tr>`;
+                        // build table 1~7교시 (세로 크기 증가)
+                        let table = `<p style="margin: 10px 0 5px 0; font-weight: bold;">시간표:</p><table style="border-collapse:collapse; width:100%; font-size:13px; line-height:1.4;"><tr><th style="border:1px solid #ccc; padding:6px;">교시</th><th style="border:1px solid #ccc; padding:6px;">시간</th><th style="border:1px solid #ccc; padding:6px;">과목</th></tr>`;
                         for (let p = 1; p <= 7; p++) {
                             const e = entries.find(en => en.period === p) || null;
                             const time = e ? e.time : '';
                             const subj = e ? e.subject : '';
-                            table += `<tr><td style="border:1px solid #eee; padding:1px; text-align:center;">${p}</td><td style="border:1px solid #eee; padding:1px; text-align:center;">${time}</td><td style="border:1px solid #eee; padding:1px;">${subj}</td></tr>`;
+                            table += `<tr><td style="border:1px solid #eee; padding:6px; text-align:center;">${p}</td><td style="border:1px solid #eee; padding:6px; text-align:center;">${time}</td><td style="border:1px solid #eee; padding:6px;">${subj}</td></tr>`;
                         }
                         table += '</table>';
                         timetableDiv.innerHTML = table;
@@ -535,6 +559,9 @@
                 if (mealPart) {
                     const mealHtml = renderMealTable(mealPart);
                     timetableDiv.innerHTML += mealHtml;
+                } else {
+                    // 급식 정보가 없을 경우 메시지 표시
+                    timetableDiv.innerHTML += '<div style="margin-top:15px;"><p style="margin:8px 0; font-size:12px; color:#666;">이 날짜의 급식 정보가 없습니다.</p></div>';
                 }
 
                 // '수정' 버튼은 날짜 선택 시 항상 표시 (추가/수정 모두 처리)
