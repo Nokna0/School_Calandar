@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>학습 캘린더</title>
+    </head>
+    <body>
+        <h1 id="heading">학습 캘린더</h1>
+        <div style="display: flex; gap: 20px;">
+            <div id="leftColumn" style="display:flex; flex-direction:column; align-items:center; flex:1;">
+                <script>
+                    let date = "";
+                    let year = 2025;
+                    let month = 12;
+                    let schedules = {}; // 일정 저장 객체
+                    let legalHolidays = {}; // 법적 공휴일 표시용
+                    let selected = { year: null, month: null, day: null };
+
+                    // 청주고등학교 시간표 (요일별)
+                    const timetables = {
+                        0: { name: '일요일', classes: ['휴일'] },
+                        1: { name: '월요일', classes: ['1교시: 08:30-09:15', '2교시: 09:25-10:10', '3교시: 10:20-11:05', '4교시: 11:15-12:00', '점심: 12:00-13:00', '5교시: 13:00-13:45', '6교시: 13:55-14:40', '7교시: 14:50-15:35'] },
+                        2: { name: '화요일', classes: ['1교시: 08:30-09:15', '2교시: 09:25-10:10', '3교시: 10:20-11:05', '4교시: 11:15-12:00', '점심: 12:00-13:00', '5교시: 13:00-13:45', '6교시: 13:55-14:40', '7교시: 14:50-15:35'] },
+                        3: { name: '수요일', classes: ['1교시: 08:30-09:15', '2교시: 09:25-10:10', '3교시: 10:20-11:05', '4교시: 11:15-12:00', '점심: 12:00-13:00', '5교시: 13:00-13:45', '6교시: 13:55-14:40', '7교시: 14:50-15:35'] },
+                        4: { name: '목요일', classes: ['1교시: 08:30-09:15', '2교시: 09:25-10:10', '3교시: 10:20-11:05', '4교시: 11:15-12:00', '점심: 12:00-13:00', '5교시: 13:00-13:45', '6교시: 13:55-14:40', '7교시: 14:50-15:35'] },
+                        5: { name: '금요일', classes: ['1교시: 08:30-09:15', '2교시: 09:25-10:10', '3교시: 10:20-11:05', '4교시: 11:15-12:00', '점심: 12:00-13:00', '5교시: 13:00-13:45', '6교시: 13:55-14:40', '자율: 14:50-15:35'] },
+                        6: { name: '토요일', classes: ['휴일'] }
+                    };
+
+                    // CSV 파서 및 캘린더에 삽입
+                    function parseCSV(csv) {
+                        return csv.split(/\r?\n/).map(r => r.split(','));
+                    }
+
+                    let csvPopulatedKeys = new Set();
+
+                    // 클래스별로 날짜->항목 배열을 저장 (예: classSchedules['3-1']['2025-12-22'] = [{period:1,time:'08:40',subject:'',teacher:''},...])
+                    const classSchedules = {};
+
+                    function loadClassSchedules() {
+                        // 초기화
+                        csvPopulatedKeys.forEach(k => { /* no-op for backward compatibility */ });
+                        csvPopulatedKeys.clear();
+                        for (const cn of Object.keys(classCSVs)) classSchedules[cn] = {};
+
+                        for (const className in classCSVs) {
+                            const csv = classCSVs[className];
+                            const rows = parseCSV(csv);
+                            if (rows.length < 2) continue;
+                            const header = rows[0];
+                            // 날짜 컬럼(헤더) 추출: 인덱스와 일(day)
+                            const dateCols = [];
+                            for (let c = 1; c < header.length; c++) {
+                                const m = header[c] && header[c].match(/(\d{1,2})/);
+                                if (m) dateCols.push({ col: c, day: Number(m[1]) });
+                            }
+
+                            dateCols.forEach(dc => {
+                                // 날짜가 1~14이면 다음 달로 판단 (CSV이 월말-다음달 초 형태)
+                                let targetMonth = dc.day <= 14 ? (month === 12 ? 1 : month + 1) : month;
+                                let targetYear = (month === 12 && targetMonth === 1) ? year + 1 : year;
+                                const key = `${targetYear}-${targetMonth}-${dc.day}`;
+
+                                const entries = [];
+                                for (let r = 1; r < rows.length; r += 2) {
+                                    const subjRow = rows[r] || [];
+                                    const teacherRow = rows[r + 1] || [];
+                                    const periodInfo = (subjRow[0] || '').trim();
+                                    const subj = (subjRow[dc.col] || '').trim();
+                                    const teacher = (teacherRow[dc.col] || '').trim();
+                                    if (!subj) continue;
+                                    const pMatch = periodInfo.match(/(\d+)/);
+                                    const tMatch = periodInfo.match(/\(([^)]+)\)/);
+                                    const periodNum = pMatch ? Number(pMatch[1]) : null;
+                                    const time = tMatch ? tMatch[1] : '';
+                                    entries.push({ period: periodNum, time: time, subject: subj, teacher: teacher });
+                                }
+
+                                if (entries.length) {
+                                    csvPopulatedKeys.add(key);
+                                    if (!classSchedules[className]) classSchedules[className] = {};
+                                    classSchedules[className][key] = entries;
+                                }
+                            });
+                        }
+                    }
+
+                    // CSV 기반 일정 로드 will be called after classCSVs are defined
+
+                    // 기본 공휴일 / 국제적인 날을 연도에 맞게 삽입
+                    function populateDefaultHolidays(y) {
+                        // 대한민국 주요 공휴일(태양력 기반) 목록
+                        const defaults = [
+                            { m: 1, d: 1, title: "신정 (새해 첫날)" },
+                            { m: 3, d: 1, title: "삼일절 (Independence Movement Day)" },
+                            { m: 5, d: 1, title: "근로자의 날 (Labor Day)" },
+                            { m: 5, d: 5, title: "어린이날 (Children's Day)" },
+                            { m: 6, d: 6, title: "현충일 (Memorial Day)" },
+                            { m: 8, d: 15, title: "광복절 (Liberation Day)" },
+                            { m: 10, d: 3, title: "개천절 (National Foundation Day)" },
+                            { m: 10, d: 9, title: "한글날 (Hangeul Day)" },
+                            { m: 12, d: 25, title: "크리스마스 (Christmas)" }
+                        ];
+
+                        defaults.forEach(h => {
+                            let key = `${y}-${h.m}-${h.d}`;
+                            if (!schedules[key]) schedules[key] = h.title; // don't overwrite user schedules
+                            legalHolidays[key] = true;
+                        });
+
+                        // 참고: 설날/추석/부처님오신날 등 음력 기반 공휴일은 별도 변환 필요
+                    }
+
+                    populateDefaultHolidays(year);
+
+                    // 클래스별 CSV 파일명(같은 폴더)
+                    const classFileNames = ['3-1.csv','2-7.csv','2-8.csv','2-9.csv','2-10.csv','2-11.csv'];
+
+                    // classCSVs에 파일 내용이 들어감(키는 파일명에서 .csv 제거)
+                    const classCSVs = {};
+
+                    // 급식(월별) CSV 파일명 목록
+                    const mealFileNames = ['2025-10.csv','2025-11.csv','2025-12.csv'];
+                    const mealCSVs = {}; // key: '2025-10' -> text
+
+                    // CSV(급식) 파싱: 날짜 헤더 행을 찾아 각 열의 날짜별 내용을 수집
+                    function parseMealCSV(text, filename) {
+                        const rows = parseCSV(text);
+                        // find header row that contains day numbers
+                        let headerRow = -1;
+                        for (let i = 0; i < rows.length; i++) {
+                            if (rows[i].some(cell => /^\s*\d{1,2}\s*$/.test(cell))) { headerRow = i; break; }
+                        }
+                        if (headerRow === -1) return {};
+                        // determine year-month from filename like '2025-10.csv' -> '2025-10'
+                        const base = filename.replace('.csv','');
+                        const ym = base.split('-');
+                        const y = Number(ym[0]) || year;
+                        const m = Number(ym[1]) || month;
+
+                        const result = {}; // key -> text
+                        const header = rows[headerRow];
+                        for (let c = 0; c < header.length; c++) {
+                            const cell = header[c] && header[c].trim();
+                            const mday = cell && cell.match(/(\d{1,2})/);
+                            if (!mday) continue;
+                            const day = Number(mday[1]);
+                            const key = `${y}-${m}-${day}`;
+                            const parts = [];
+                            // collect subsequent non-empty cells in this column
+                            for (let r = headerRow + 1; r < rows.length; r++) {
+                                const val = (rows[r][c] || '').trim();
+                                if (!val) continue;
+                                // stop if we hit a new header-like numeric row (rare)
+                                if (/^\s*\d{1,2}\s*$/.test(val)) break;
+                                parts.push(val);
+                            }
+                            if (parts.length) {
+                                // join parts with newline and normalize spaces
+                                result[key] = parts.join('\n');
+                            }
+                        }
+                        return result;
+                    }
+
+                    // mealCSVs에서 파싱하여 schedules에 삽입
+                    function parseMealCSVsToSchedules() {
+                        for (const fnameKey in mealCSVs) {
+                            const txt = mealCSVs[fnameKey];
+                            const parsed = parseMealCSV(txt, fnameKey + '.csv');
+                            for (const k in parsed) {
+                                // don't overwrite user schedules; append if exists
+                                if (schedules[k]) schedules[k] += '\n\n식단:\n' + parsed[k]; else schedules[k] = '식단:\n' + parsed[k];
+                            }
+                        }
+                    }
+
+                    // 시도: 같은 폴더에서 meal CSV 자동 불러오기
+                    async function tryLoadMealCSVs() {
+                        let allLoaded = true;
+                        for (const fname of mealFileNames) {
+                            try {
+                                const txt = await fetchTextWithEncoding(fname);
+                                const key = fname.replace('.csv','');
+                                mealCSVs[key] = txt;
+                            } catch (e) {
+                                allLoaded = false;
+                                break;
+                            }
+                        }
+                        if (Object.keys(mealCSVs).length) {
+                            parseMealCSVsToSchedules();
+                            renderCalendar();
+                        }
+                        return allLoaded;
+                    }
+
+                    // 고정(예비) 시간표 — 사용자가 제공한 각 반의 1~7교시 데이터
+                    const defaultClassTimetables = {
+                        '3-1': [
+                            {period:1,time:'08:40',subject:'세지',teacher:'최은'},
+                            {period:2,time:'09:40',subject:'영미문',teacher:'유희'},
+                            {period:3,time:'10:40',subject:'생과',teacher:'경윤'},
+                            {period:4,time:'11:40',subject:'N공강',teacher:'곽지'},
+                            {period:5,time:'13:30',subject:'문매',teacher:'민혜'},
+                            {period:6,time:'14:30',subject:'여지',teacher:'송호'},
+                            {period:7,time:'15:30',subject:'심국',teacher:'이혜'}
+                        ],
+                        '2-7': [
+                            {period:1,time:'08:40',subject:'공강',teacher:'윤정'},
+                            {period:2,time:'09:40',subject:'창진',teacher:'지영'},
+                            {period:3,time:'10:40',subject:'지Ⅰ',teacher:'이용'},
+                            {period:4,time:'11:40',subject:'수Ⅱ',teacher:'고형'},
+                            {period:5,time:'13:30',subject:'생Ⅰ',teacher:'김장'},
+                            {period:6,time:'14:30',subject:'영Ⅱ',teacher:'배선'},
+                            {period:7,time:'15:30',subject:'운건',teacher:'정성'}
+                        ],
+                        '2-8': [
+                            {period:1,time:'08:40',subject:'확통',teacher:'한아'},
+                            {period:2,time:'09:40',subject:'수Ⅱ',teacher:'김아'},
+                            {period:3,time:'10:40',subject:'물Ⅰ',teacher:'김경'},
+                            {period:4,time:'11:40',subject:'문학',teacher:'김다'},
+                            {period:5,time:'13:30',subject:'지Ⅰ',teacher:'석경'},
+                            {period:6,time:'14:30',subject:'영Ⅱ',teacher:'윤재'},
+                            {period:7,time:'15:30',subject:'영Ⅱ',teacher:'윤재'}
+                        ],
+                        '2-9': [
+                            {period:1,time:'08:40',subject:'생Ⅰ',teacher:'김장'},
+                            {period:2,time:'09:40',subject:'화Ⅰ',teacher:'이상'},
+                            {period:3,time:'10:40',subject:'영Ⅱ',teacher:'윤재'},
+                            {period:4,time:'11:40',subject:'확통',teacher:'한아'},
+                            {period:5,time:'13:30',subject:'확통',teacher:'한아'},
+                            {period:6,time:'14:30',subject:'문학',teacher:'김다'},
+                            {period:7,time:'15:30',subject:'수Ⅱ',teacher:'김아'}
+                        ],
+                        '2-10': [
+                            {period:1,time:'08:40',subject:'창진',teacher:'박병'},
+                            {period:2,time:'09:40',subject:'공강',teacher:'권경'},
+                            {period:3,time:'10:40',subject:'확통',teacher:'한아'},
+                            {period:4,time:'11:40',subject:'지Ⅰ',teacher:'이용'},
+                            {period:5,time:'13:30',subject:'수Ⅱ',teacher:'김아'},
+                            {period:6,time:'14:30',subject:'운건',teacher:'정성'},
+                            {period:7,time:'15:30',subject:'물Ⅰ',teacher:'김경'}
+                        ],
+                        '2-11': [
+                            {period:1,time:'08:40',subject:'화Ⅰ',teacher:'이상'},
+                            {period:2,time:'09:40',subject:'확통',teacher:'박래'},
+                            {period:3,time:'10:40',subject:'문학',teacher:'김다'},
+                            {period:4,time:'11:40',subject:'수Ⅱ',teacher:'김아'},
+                            {period:5,time:'13:30',subject:'영Ⅱ',teacher:'윤재'},
+                            {period:6,time:'14:30',subject:'공학',teacher:'강소'},
+                            {period:7,time:'15:30',subject:'화Ⅰ',teacher:'이상'}
+                        ]
+                    };
+
+
+                    // CSV 파일 자동 불러오기 시도. 실패하면 사용자에게 파일 입력을 보여줌.
+                    // 파일을 가져와서 텍스트로 디코딩(UTF-8 우선, 실패 시 EUC-KR로 재시도)
+                    async function fetchTextWithEncoding(url) {
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error('fetch failed');
+                        const buf = await res.arrayBuffer();
+                        let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+                        // � 문자가 보이면 euc-kr로 재시도
+                        if (text.includes('\uFFFD') || /���/.test(text)) {
+                            try {
+                                text = new TextDecoder('euc-kr').decode(buf);
+                            } catch (e) {
+                                // fallback: keep original
+                            }
+                        }
+                        return text;
+                    }
+
+                    async function tryLoadCSVs() {
+                        const loaderDiv = document.getElementById('csvLoader');
+                        let allLoaded = true;
+                        for (const fname of classFileNames) {
+                            try {
+                                const txt = await fetchTextWithEncoding(fname);
+                                const key = fname.replace('.csv','');
+                                classCSVs[key] = txt;
+                            } catch (e) {
+                                allLoaded = false;
+                                break;
+                            }
+                        }
+                        if (allLoaded) {
+                            if (loaderDiv) loaderDiv.style.display = 'none';
+                            loadClassSchedules();
+                            renderCalendar();
+                        } else {
+                            if (loaderDiv) loaderDiv.style.display = 'block';
+                        }
+                        // try loading meal CSVs as well
+                        tryLoadMealCSVs().catch(()=>{});
+                    }
+
+                    // 사용자가 파일 선택했을 때 처리
+                    async function handleLocalCSVFiles(files) {
+                        for (const f of files) {
+                            try {
+                                const buf = await f.arrayBuffer();
+                                let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+                                if (text.includes('\uFFFD') || /���/.test(text)) {
+                                    try { text = new TextDecoder('euc-kr').decode(buf); } catch (e) {}
+                                }
+                                const name = f.name || '';
+                                const key = name.replace('.csv','');
+                                // if filename matches YYYY-M or YYYY-MM -> meal CSV
+                                if (/^\d{4}-\d{1,2}$/.test(key)) {
+                                    mealCSVs[key] = text;
+                                } else if (classFileNames.includes(name)) {
+                                    classCSVs[key] = text;
+                                } else {
+                                    // fallback: if name like '3-1' or '2-7' treat as class
+                                    classCSVs[key] = text;
+                                }
+                            } catch (e) {
+                                console.error('파일 읽기 실패', f.name, e);
+                            }
+                        }
+                        // re-parse both kinds
+                        loadClassSchedules();
+                        parseMealCSVsToSchedules();
+                        renderCalendar();
+                        const loaderDiv = document.getElementById('csvLoader');
+                        if (loaderDiv) loaderDiv.style.display = 'none';
+                    }
+
+                    // CSV 로드 시도: 같은 폴더에서 자동으로 불러오고, 실패 시 파일선택 UI로 대체
+                    tryLoadCSVs();
+
+                    let input = document.getElementById("myDate");
+                    if (input) {
+                        input.addEventListener("change", function() {
+                            date = input.value;
+                            year = Number(date.slice(0, 4));
+                            month = Number(date.slice(5, 7));
+                            alert(date);
+                        });
+                    }
+                </script>
+
+                <div id="csvLoader" style="display:none; margin:8px 0; text-align:center; font-size:13px; color:#333;">
+                    같은 폴더에서 CSV 파일을 자동으로 불러옵니다. 자동으로 불러오지 못하면 파일을 선택하세요:
+                    <div style="margin-top:6px;"><input id="csvFiles" type="file" accept=".csv" multiple></div>
+                </div>
+
+                <div id="calendarContainer"></div>
+
+                <script>
+                    function renderCalendar() {
+                        const container = document.getElementById('calendarContainer');
+                        // 상단 헤더에도 현재 연/월 표시
+                        // const hdr = document.getElementById('heading');
+                        // if (hdr) hdr.textContent = `학습 캘린더 - ${year}년 ${month}월`;
+                        let firstDay = new Date(year, month - 1, 1).getDay();
+                        let lastDay = new Date(year, month, 0).getDate();
+
+                        let html = `<div class="month-controls" style="text-align:center; margin-bottom:10px;"><button onclick="prevMonth()">◀</button> <span id="monthTitle">${year}년 ${month}월</span> <button onclick="nextMonth()">▶</button></div>`;
+
+                        html += '<table><tr class="day"><td>일</td><td>월</td><td>화</td><td>수</td><td>목</td><td>금</td><td>토</td></tr>';
+                        html += "<tr>";
+
+                        for (let i = 0; i < firstDay; i++) {
+                            html += "<td class='empty'></td>";
+                        }
+
+                        for (let i = 1; i <= lastDay; i++) {
+                            let key = `${year}-${month}-${i}`;
+                            let dow = new Date(year, month - 1, i).getDay();
+                            let isSunday = (dow === 0);
+                            let isSaturday = (dow === 6);
+                            let isLegal = !!legalHolidays[key];
+                            let classes = ['clickable'];
+                            if (isSaturday) {
+                                classes.push('blue-day');
+                            } else if (isSunday || isLegal) {
+                                classes.push('red-day');
+                            }
+                            let titleAttr = schedules[key] ? ` title="${schedules[key].replace(/"/g, '\\"')}"` : "";
+                            html += `<td class='${classes.join(' ')}' data-date='${key}' onclick="showDate(${year}, ${month}, ${i})"${titleAttr}>${i}</td>`;
+
+                            if ((i + firstDay) % 7 === 0) {
+                                html += "</tr><tr>";
+                            }
+                        }
+
+                        let remainingCells = (firstDay + lastDay) % 7;
+                        if (remainingCells !== 0) {
+                            for (let i = 0; i < 7 - remainingCells; i++) {
+                                html += "<td class='empty'></td>";
+                            }
+                        }
+                        html += "</tr></table>";
+
+                        container.innerHTML = html;
+                    }
+
+                    function prevMonth() {
+                        month -= 1;
+                        if (month < 1) { month = 12; year -= 1; populateDefaultHolidays(year); }
+                        // 월이 바뀌면 CSV 기반 일정도 재로딩
+                        loadClassSchedules();
+                        renderCalendar();
+                    }
+
+                    function nextMonth() {
+                        month += 1;
+                        if (month > 12) { month = 1; year += 1; populateDefaultHolidays(year); }
+                        // 월이 바뀌면 CSV 기반 일정도 재로딩
+                        loadClassSchedules();
+                        renderCalendar();
+                    }
+
+                    // 초기 렌더
+                    renderCalendar();
+                </script>
+            </div>
+                <div id="selectedDate" style="padding: 20px; border: 1px solid #000; min-width: 200px;">
+                <p>선택된 날짜:</p>
+                <p id="dateDisplay">없음</p>
+                <p id="scheduleDisplay">일정: 없음</p>
+                <div style="margin:8px 0;">
+                    <label for="classSelect">학급 선택: </label>
+                    <select id="classSelect">
+                        <option value="">선택 없음</option>
+                    </select>
+                </div>
+                <div id="timetableDisplay" style="margin: 15px 0;"></div>
+                <button id="modifyButton" style="display: none;" onclick="modifySchedule()">수정</button>
+            </div>
+        </div>
+
+        <script>
+            // 급식 데이터를 조식/중식/석식 테이블로 변환
+            function renderMealTable(mealText) {
+                const lines = mealText.split('\n');
+                const meals = { '조식': [], '중식': [], '석식': [] };
+                let currentMeal = null;
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    if (trimmed === '조식') { currentMeal = '조식'; }
+                    else if (trimmed === '중식') { currentMeal = '중식'; }
+                    else if (trimmed === '석식') { currentMeal = '석식'; }
+                    else if (currentMeal && trimmed !== '식단:') {
+                        meals[currentMeal].push(trimmed);
+                    }
+                }
+                let html = '<div style="margin-top:10px;"><p style="margin:5px 0; font-weight:bold;">급식</p>';
+                for (const mType of ['조식','중식','석식']) {
+                    if (meals[mType].length === 0) continue;
+                    html += `<p style="margin:5px 0 2px 0; font-size:11px; font-weight:bold;">${mType}</p>`;
+                    html += '<table style="border-collapse:collapse; width:100%; font-size:11px; margin-bottom:5px;"><tbody>';
+                    for (const item of meals[mType]) {
+                        html += `<tr><td style="border:1px solid #ddd; padding:3px; text-align:left;">${item}</td></tr>`;
+                    }
+                    html += '</tbody></table>';
+                }
+                html += '</div>';
+                return html;
+            }
+
+            function showDate(year, month, day) {
+                selected.year = year; selected.month = month; selected.day = day;
+                document.getElementById("dateDisplay").textContent = `${year}년 ${month}월 ${day}일`;
+
+                let key = `${year}-${month}-${day}`;
+                let schedule = schedules[key] || null;
+                // 급식과 사용자 일정 분리
+                let userSchedule = schedule ? schedule.replace(/식단:[\s\S]*$/,'').trim() : '';
+                let mealPart = schedule && schedule.includes('식단:') ? schedule.substring(schedule.indexOf('식단:')) : '';
+                document.getElementById("scheduleDisplay").textContent = userSchedule ? userSchedule : "일정: 없음";
+
+                // 시간표 표시: 선택된 학급이 있으면 해당 학급의 CSV 기반 시간표를 표로 출력
+                const timetableDiv = document.getElementById("timetableDisplay");
+                const classSelect = document.getElementById('classSelect');
+                const selClass = classSelect ? classSelect.value : '';
+                const dow = new Date(year, month - 1, day).getDay();
+                const isWeekend = (dow === 0 || dow === 6); // 일요일 또는 토요일
+                
+                if (selClass) {
+                    // 주말(토일)이면 휴일 표시, 평일이면 CSV 또는 기본 시간표 사용
+                    const entries = !isWeekend && classSchedules[selClass] && classSchedules[selClass][key] ? classSchedules[selClass][key] : 
+                                   (!isWeekend ? (defaultClassTimetables[selClass] || null) : null);
+                    if (entries) {
+                        // build table 1~7교시 (크기 극소화, 담당 제거)
+                        let table = `<table style="border-collapse:collapse; width:100%; font-size:8px; line-height:1;"><tr><th style="border:1px solid #ccc; padding:1px;">교시</th><th style="border:1px solid #ccc; padding:1px;">시간</th><th style="border:1px solid #ccc; padding:1px;">과목</th></tr>`;
+                        for (let p = 1; p <= 7; p++) {
+                            const e = entries.find(en => en.period === p) || null;
+                            const time = e ? e.time : '';
+                            const subj = e ? e.subject : '';
+                            table += `<tr><td style="border:1px solid #eee; padding:1px; text-align:center;">${p}</td><td style="border:1px solid #eee; padding:1px; text-align:center;">${time}</td><td style="border:1px solid #eee; padding:1px;">${subj}</td></tr>`;
+                        }
+                        table += '</table>';
+                        timetableDiv.innerHTML = table;
+                    } else {
+                        // 주말 또는 시간표 없음 -> 요일별 기본 시간표(휴일 포함) 표시
+                        let timetable = timetables[dow];
+                        let timetableHtml = `<p style="margin: 10px 0 5px 0; font-weight: bold;">${timetable.name} 시간표:</p>`;
+                        timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
+                        timetable.classes.forEach(cls => { timetableHtml += `<p style="margin: 2px 0;">${cls}</p>`; });
+                        timetableHtml += '</div>';
+                        timetableDiv.innerHTML = timetableHtml;
+                    }
+                } else {
+                    // no class selected -> show weekday default
+                    let dow = new Date(year, month - 1, day).getDay();
+                    let timetable = timetables[dow];
+                    let timetableHtml = `<p style="margin: 10px 0 5px 0; font-weight: bold;">${timetable.name} 시간표:</p>`;
+                    timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
+                    timetable.classes.forEach(cls => { timetableHtml += `<p style="margin: 2px 0;">${cls}</p>`; });
+                    timetableHtml += '</div>';
+                    timetableDiv.innerHTML = timetableHtml;
+                }
+
+                // 급식 표시: mealPart가 있으면 테이블로 렌더링해서 timetableDiv 아래 추가
+                if (mealPart) {
+                    const mealHtml = renderMealTable(mealPart);
+                    timetableDiv.innerHTML += mealHtml;
+                }
+
+                // '수정' 버튼은 날짜 선택 시 항상 표시 (추가/수정 모두 처리)
+                document.getElementById("modifyButton").style.display = "inline-block";
+            }
+
+            
+
+            function modifySchedule() {
+                if (!selected.year) {
+                    alert("날짜를 먼저 선택하세요.");
+                    return;
+                }
+                let key = `${selected.year}-${selected.month}-${selected.day}`;
+                let current = schedules[key] || "";
+                let newSchedule = prompt("일정을 입력/수정하세요:", current);
+                if (newSchedule === null) return;
+                if (newSchedule.trim() === "") {
+                    // 빈 문자열이면 일정 삭제
+                    delete schedules[key];
+                    document.getElementById("scheduleDisplay").textContent = "일정: 없음";
+                } else {
+                    schedules[key] = newSchedule;
+                    document.getElementById("scheduleDisplay").textContent = newSchedule;
+                }
+
+                // 달력 셀 툴팁만 업데이트 (색상 변화는 제거)
+                let cell = document.querySelector(`td[data-date='${key}']`);
+                if (cell) {
+                    if (schedules[key]) {
+                        cell.title = schedules[key];
+                    } else {
+                        cell.removeAttribute('title');
+                    }
+                }
+            }
+        </script>
+
+        <script>
+            const csvInput = document.getElementById('csvFiles');
+            if (csvInput) {
+                csvInput.addEventListener('change', function(e) {
+                    handleLocalCSVFiles(e.target.files);
+                });
+            }
+            
+            // 학급 선택 드롭다운 채우기
+            function populateClassSelect() {
+                const sel = document.getElementById('classSelect');
+                if (!sel) return;
+                // clear
+                sel.innerHTML = '';
+                const none = document.createElement('option'); none.value = ''; none.textContent = '선택 없음'; sel.appendChild(none);
+                for (const fname of classFileNames) {
+                    const key = fname.replace('.csv','');
+                    const opt = document.createElement('option');
+                    opt.value = key; opt.textContent = key;
+                    sel.appendChild(opt);
+                }
+                sel.addEventListener('change', function() {
+                    if (selected.year) showDate(selected.year, selected.month, selected.day);
+                });
+            }
+
+            // tryLoadCSVs 후에 드롭다운 채우기 위해 호출
+            populateClassSelect();
+        </script>
+
+        <style>
+            table { border-collapse: collapse; }
+            th, td {
+                width: 100px;
+                height: 50px;
+                text-align: center;
+                border: 1px solid #000000;
+            }
+            h2 {
+                text-align: center;
+            }
+                /* 상단 제목(학습 캘린더) 가운데 정렬 및 기본 볼드 해제 */
+                #heading { text-align: center; width: 100%; margin: 10px 0; font-weight: normal; }
+            .day { background-color: lightgray; }
+            .empty { background-color: lightgoldenrodyellow; }
+            .clickable { cursor: pointer; }
+            /* 토요일: 파란색, 일요일/법정공휴일: 빨간색 */
+                .blue-day { color: blue; font-weight: normal; }
+                .red-day { color: red; font-weight: normal; }
+            .clickable:hover { background-color: lightblue; }
+
+            /* 크기 조정: 셀, 글자 크기 소폭 감소 */
+            th, td { width: 110px; height: 70px; font-size: 16px; }
+            th { font-size: 16px; }
+            #heading { font-size: 28px; }
+            #monthTitle { font-size: 20px; }
+            .month-controls button { font-size: 16px; padding: 6px 10px; margin: 0 6px; }
+
+            table {
+                margin: 10px;
+                border-style: double;
+            }
+        </style>      
+    </body>
+</html>
