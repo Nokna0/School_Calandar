@@ -4,10 +4,10 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>캘린더</title>
+        <title>학습 캘린더</title>
     </head>
     <body>
-        <h1 id="heading">학습 캘린더</h1>
+        <h1 id="heading"><b>학습 캘린더</b></h1>
         <div style="display: flex; gap: 20px;">
             <div id="leftColumn" style="display:flex; flex-direction:column; align-items:center; flex:1;">
                 <script>
@@ -93,15 +93,15 @@
                     function populateDefaultHolidays(y) {
                         // 대한민국 주요 공휴일(태양력 기반) 목록
                         const defaults = [
-                            { m: 1, d: 1, title: "신정 (새해 첫날)" },
-                            { m: 3, d: 1, title: "삼일절 (Independence Movement Day)" },
-                            { m: 5, d: 1, title: "근로자의 날 (Labor Day)" },
-                            { m: 5, d: 5, title: "어린이날 (Children's Day)" },
-                            { m: 6, d: 6, title: "현충일 (Memorial Day)" },
-                            { m: 8, d: 15, title: "광복절 (Liberation Day)" },
-                            { m: 10, d: 3, title: "개천절 (National Foundation Day)" },
-                            { m: 10, d: 9, title: "한글날 (Hangeul Day)" },
-                            { m: 12, d: 25, title: "크리스마스 (Christmas)" }
+                            { m: 1, d: 1, title: "신정" },
+                            { m: 3, d: 1, title: "삼일절" },
+                            { m: 5, d: 1, title: "근로자의 날" },
+                            { m: 5, d: 5, title: "어린이날" },
+                            { m: 6, d: 6, title: "현충일" },
+                            { m: 8, d: 15, title: "광복절" },
+                            { m: 10, d: 3, title: "개천절" },
+                            { m: 10, d: 9, title: "한글날" },
+                            { m: 12, d: 25, title: "크리스마스" }
                         ];
 
                         defaults.forEach(h => {
