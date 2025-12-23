@@ -539,11 +539,20 @@
                 
                 if (selClass) {
                     // 주말(토일)이면 휴일 표시, 평일이면 CSV 또는 기본 시간표 사용
-                    const entries = !isWeekend && classSchedules[selClass] && classSchedules[selClass][key] ? classSchedules[selClass][key] : 
-                                   (!isWeekend ? (defaultClassTimetables[selClass] || null) : null);
+                    let entries = null;
+                    if (!isWeekend) {
+                        // CSV 데이터가 있는지 확인 (안전하게)
+                        if (classSchedules[selClass] && classSchedules[selClass][key]) {
+                            entries = classSchedules[selClass][key];
+                        } else if (defaultClassTimetables[selClass]) {
+                            // CSV 없으면 기본 시간표 사용
+                            entries = defaultClassTimetables[selClass];
+                        }
+                    }
+
                     if (entries) {
                         // build table 1~7교시 (세로 크기 증가)
-                        let table = `<p style="margin: 10px 0 5px 0; font-weight: bold;">시간표:</p><table style="border-collapse:collapse; width:100%; font-size:13px; line-height:1.4;"><tr><th style="border:1px solid #ccc; padding:6px;">교시</th><th style="border:1px solid #ccc; padding:6px;">시간</th><th style="border:1px solid #ccc; padding:6px;">과목</th></tr>`;
+                        let table = `<p style="margin: 10px 0 5px 0; font-weight: bold;">시간표 (${selClass}):</p><table style="border-collapse:collapse; width:100%; font-size:13px; line-height:1.4;"><tr><th style="border:1px solid #ccc; padding:6px;">교시</th><th style="border:1px solid #ccc; padding:6px;">시간</th><th style="border:1px solid #ccc; padding:6px;">과목</th></tr>`;
                         for (let p = 1; p <= 7; p++) {
                             const e = entries.find(en => en.period === p) || null;
                             const time = e ? e.time : '';
@@ -556,14 +565,21 @@
                         // 주말 또는 시간표 없음 -> 요일별 기본 시간표(휴일 포함) 표시
                         let timetable = timetables[dow];
                         let timetableHtml = `<p style="margin: 10px 0 5px 0; font-weight: bold;">${timetable.name} 시간표:</p>`;
-                        timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
-                        timetable.classes.forEach(cls => { timetableHtml += `<p style="margin: 2px 0;">${cls}</p>`; });
-                        timetableHtml += '</div>';
+                        if (isWeekend) {
+                            timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
+                            timetable.classes.forEach(cls => { timetableHtml += `<p style="margin: 2px 0;">${cls}</p>`; });
+                            timetableHtml += '</div>';
+                        } else {
+                            // 평일인데 시간표가 없는 경우
+                            timetableHtml += `<div style="font-size: 12px; color:#666; margin:10px 0;"><p>${selClass} 학급의 시간표 정보가 없습니다.</p><p>일반 시간표를 표시합니다.</p></div>`;
+                            timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
+                            timetable.classes.forEach(cls => { timetableHtml += `<p style="margin: 2px 0;">${cls}</p>`; });
+                            timetableHtml += '</div>';
+                        }
                         timetableDiv.innerHTML = timetableHtml;
                     }
                 } else {
                     // no class selected -> show weekday default
-                    let dow = new Date(year, month - 1, day).getDay();
                     let timetable = timetables[dow];
                     let timetableHtml = `<p style="margin: 10px 0 5px 0; font-weight: bold;">${timetable.name} 시간표:</p>`;
                     timetableHtml += '<div style="font-size: 13px; line-height: 1.6;">';
@@ -649,12 +665,23 @@
                 // clear
                 sel.innerHTML = '';
                 const none = document.createElement('option'); none.value = ''; none.textContent = '선택 없음'; sel.appendChild(none);
-                for (const fname of classFileNames) {
-                    const key = fname.replace('.csv','');
+
+                // 2학년 1반부터 14반까지
+                for (let i = 1; i <= 14; i++) {
+                    const key = `2-${i}`;
                     const opt = document.createElement('option');
                     opt.value = key; opt.textContent = key;
                     sel.appendChild(opt);
                 }
+
+                // 3학년 1반부터 14반까지
+                for (let i = 1; i <= 14; i++) {
+                    const key = `3-${i}`;
+                    const opt = document.createElement('option');
+                    opt.value = key; opt.textContent = key;
+                    sel.appendChild(opt);
+                }
+
                 sel.addEventListener('change', function() {
                     if (selected.year) showDate(selected.year, selected.month, selected.day);
                 });
